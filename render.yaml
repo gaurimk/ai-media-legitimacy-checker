@@ -3,7 +3,7 @@ services:
     name: ai-media-legitimacy-checker
     runtime: python
     rootDir: backend
-    plan: starter  # paid tier needed for the persistent disk below
+    plan: free  # no persistent disk on this tier -- see note below
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
@@ -21,7 +21,3 @@ services:
         value: "20"
       - key: ALLOWED_ORIGINS
         value: "*"  # tighten to your real frontend origin(s) once you have one
-    disk:
-      name: ai-media-legitimacy-checker-data
-      mountPath: /opt/render/project/src/backend/data
-      sizeGB: 1
