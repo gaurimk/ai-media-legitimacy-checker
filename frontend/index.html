@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Media Legitimacy Checker</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="page">
+    <header class="header">
+      <h1>AI Media Legitimacy Checker</h1>
+      <p class="subtitle">Paste a message or link, or upload an image/video that's circulating — get a sourced AI verdict before you believe or forward it.</p>
+    </header>
+
+    <section class="card">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="text" role="tab" aria-selected="true">Message / Link</button>
+        <button class="tab" data-tab="file" role="tab" aria-selected="false">Image / Video</button>
+      </div>
+
+      <form id="analyze-form">
+        <div class="tab-panel" data-panel="text">
+          <label for="text-input">Paste the message, screenshot text, or link</label>
+          <textarea id="text-input" name="text" rows="5" placeholder="e.g. 'Congratulations! You've won a lottery. Click here to claim: bit.ly/xyz'"></textarea>
+        </div>
+
+        <div class="tab-panel hidden" data-panel="file">
+          <label for="file-input">Upload an image or video</label>
+          <div id="drop-zone" class="drop-zone">
+            <input type="file" id="file-input" name="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm" />
+            <p id="drop-zone-text">Drag and drop, or click to choose a file (max 20&nbsp;MB)</p>
+          </div>
+        </div>
+
+        <label for="note-input">Anything else worth knowing? (optional)</label>
+        <input type="text" id="note-input" name="note" placeholder="e.g. 'My aunt received this on WhatsApp today'" />
+
+        <button type="submit" id="submit-btn">Check this</button>
+      </form>
+
+      <p id="form-error" class="error hidden"></p>
+    </section>
+
+    <section id="loading" class="card hidden">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>Researching this against the web — this can take up to a minute…</p>
+    </section>
+
+    <section id="result" class="card hidden">
+      <div id="verdict-badge" class="badge"></div>
+      <p id="verdict-summary"></p>
+
+      <div id="red-flags-wrap" class="hidden">
+        <h3>Red flags found</h3>
+        <ul id="red-flags-list"></ul>
+      </div>
+
+      <div id="sources-wrap" class="hidden">
+        <h3>Sources used</h3>
+        <ul id="sources-list"></ul>
+      </div>
+
+      <div id="image-wrap" class="hidden">
+        <h3>Shareable warning image</h3>
+        <img id="warning-image" alt="AI-generated scam warning graphic" />
+        <a id="download-link" download="scam-warning.png">Download to forward</a>
+      </div>
+
+      <button id="reset-btn" type="button">Check something else</button>
+    </section>
+
+    <footer class="footer">
+      <p>AI verdicts can be wrong. When in doubt, verify with the official source directly before acting.</p>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

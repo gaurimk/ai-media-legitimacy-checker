@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: ai-media-legitimacy-checker
+    runtime: python
+    rootDir: backend
+    plan: starter  # paid tier needed for the persistent disk below
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false  # set manually in the Render dashboard, never committed
+      - key: ANALYSIS_MODEL
+        value: gemini-3.5-flash-lite
+      - key: IMAGE_MODEL
+        value: gemini-3-pro-image
+      - key: MONTHLY_BUDGET_INR
+        value: "2500"
+      - key: USD_TO_INR_RATE
+        value: "90"
+      - key: MAX_UPLOAD_MB
+        value: "20"
+      - key: ALLOWED_ORIGINS
+        value: "*"  # tighten to your real frontend origin(s) once you have one
+    disk:
+      name: ai-media-legitimacy-checker-data
+      mountPath: /opt/render/project/src/backend/data
+      sizeGB: 1
