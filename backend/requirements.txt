@@ -1,0 +1,12 @@
+# Pin versions once you've confirmed them in your environment; minimums below
+# are known-good as of this project's last update (September 2026).
+fastapi>=0.115.6
+uvicorn[standard]>=0.34.0
+python-multipart>=0.0.20
+python-dotenv>=1.0.1
+pydantic>=2.10.4
+# The Interactions API (client.interactions.create) used in
+# backend/app/gemini_client.py requires a recent google-genai release --
+# run `pip install -U google-genai` if you hit an AttributeError on
+# `client.interactions`.
+google-genai>=1.0.0
