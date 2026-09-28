@@ -41,3 +41,11 @@ def estimate_image_cost_usd(model: str, image_size: str) -> float:
 
 def usd_to_inr(amount_usd: float) -> float:
     return amount_usd * settings.usd_to_inr_rate
+
+from . import config as c
+
+def text_cost(in_tokens: int, out_tokens: int) -> float:
+    return in_tokens / 1e6 * c.IN_RATE + out_tokens / 1e6 * c.OUT_RATE
+
+def image_cost() -> float:
+    return c.IMG_COST

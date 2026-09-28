@@ -25,158 +25,150 @@ body {
 .page {
   max-width: 640px;
   margin: 0 auto;
-  padding: 32px 20px 64px;
+  padding: 32px 20px 24px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .header {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
+  flex-shrink: 0;
 }
 
 .header h1 {
   margin: 0 0 8px;
-  font-size: 28px;
+  font-size: 26px;
 }
 
 .subtitle {
   color: var(--color-muted);
   margin: 0;
-  font-size: 15px;
-}
-
-.card {
-  background: var(--color-card);
-  border-radius: var(--radius);
-  border: 1px solid var(--color-border);
-  padding: 24px;
-  margin-bottom: 20px;
-}
-
-.tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.tab {
-  flex: 1;
-  padding: 10px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg);
-  border-radius: 8px;
-  cursor: pointer;
   font-size: 14px;
 }
 
-.tab.active {
-  background: var(--color-primary);
-  color: white;
-  border-color: var(--color-primary);
-}
-
-.tab-panel.hidden,
 .hidden {
   display: none !important;
 }
 
-label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  margin: 12px 0 6px;
-}
+/* --- Chat card --------------------------------------------------------- */
 
-textarea,
-input[type="text"] {
-  width: 100%;
-  padding: 10px;
+.chat-card {
+  background: var(--color-card);
+  border-radius: var(--radius);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
-  font-size: 14px;
-  font-family: inherit;
-  resize: vertical;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.drop-zone {
-  border: 2px dashed var(--color-border);
-  border-radius: 8px;
-  padding: 24px;
-  text-align: center;
-  cursor: pointer;
-  position: relative;
+.chat-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.drop-zone.drag-over {
-  border-color: var(--color-primary);
-  background: #eef2ff;
+.msg-row {
+  display: flex;
+  margin: 6px 0;
 }
 
-.drop-zone input[type="file"] {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
+.msg-row.user {
+  justify-content: flex-end;
 }
 
-#drop-zone-text {
-  margin: 0;
-  color: var(--color-muted);
-  font-size: 14px;
+.msg-row.bot {
+  justify-content: flex-start;
 }
 
-button[type="submit"],
-#reset-btn {
-  margin-top: 20px;
-  width: 100%;
-  padding: 12px;
-  border: none;
-  border-radius: 8px;
+.bubble {
+  max-width: 85%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+.bubble.bot {
+  background: #eef1f8;
+  color: var(--color-text);
+  border-bottom-left-radius: 4px;
+}
+
+.bubble.user {
   background: var(--color-primary);
   color: white;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
+  border-bottom-right-radius: 4px;
 }
 
-button[type="submit"]:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.bubble ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
 }
 
-.error {
-  color: var(--color-danger);
-  font-size: 14px;
+.bubble p {
+  margin: 8px 0 0;
+}
+
+.bubble p:first-child {
+  margin-top: 0;
+}
+
+.section-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-muted);
   margin-top: 12px;
 }
 
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  margin: 0 auto 16px;
-  animation: spin 0.8s linear infinite;
+.file-tag {
+  font-size: 13px;
+  opacity: 0.9;
+  margin-bottom: 4px;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+/* --- Quick replies ------------------------------------------------------ */
+
+.quick-replies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 85%;
 }
 
-#loading p {
-  text-align: center;
-  color: var(--color-muted);
+.quick-reply {
+  border: 1px solid var(--color-primary);
+  background: white;
+  color: var(--color-primary);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
 }
+
+.quick-reply:hover {
+  background: #eef2ff;
+}
+
+/* --- Verdict content rendered inside a bot bubble ----------------------- */
 
 .badge {
   display: inline-block;
   padding: 6px 14px;
   border-radius: 999px;
   font-weight: 700;
-  font-size: 14px;
-  margin-bottom: 12px;
+  font-size: 13.5px;
+  margin-bottom: 8px;
   color: white;
 }
 
@@ -196,41 +188,120 @@ button[type="submit"]:disabled {
   background: var(--color-muted);
 }
 
-#verdict-summary {
-  font-size: 15px;
-  line-height: 1.5;
-}
-
-#red-flags-list,
-#sources-list {
-  padding-left: 20px;
-  font-size: 14px;
-}
-
-#sources-list a {
-  color: var(--color-primary);
-}
-
-#warning-image {
+.warning-image {
   max-width: 100%;
   border-radius: 8px;
   border: 1px solid var(--color-border);
-  margin-bottom: 12px;
+  margin-top: 8px;
+  display: block;
 }
 
-#download-link {
+.download-link {
   display: inline-block;
-  padding: 10px 16px;
+  margin-top: 8px;
+  padding: 8px 14px;
   background: var(--color-text);
   color: white;
   border-radius: 8px;
   text-decoration: none;
-  font-size: 14px;
+  font-size: 13.5px;
+}
+
+/* --- Composer ------------------------------------------------------------ */
+
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.icon-btn {
+  border: 1px solid var(--color-border);
+  background: white;
+  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.composer-input-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.attachment-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #eef1f8;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  margin-bottom: 6px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.attachment-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-chip button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-muted);
+  flex-shrink: 0;
+}
+
+.text-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 14.5px;
+  font-family: inherit;
+}
+
+.text-input:disabled {
+  opacity: 0.6;
+}
+
+#send-btn {
+  border: none;
+  border-radius: 8px;
+  background: var(--color-primary);
+  color: white;
+  font-size: 14.5px;
+  font-weight: 600;
+  padding: 0 18px;
+  height: 40px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+#send-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .footer {
   text-align: center;
   color: var(--color-muted);
   font-size: 12px;
-  margin-top: 24px;
+  margin-top: 12px;
+  flex-shrink: 0;
 }

@@ -5,6 +5,16 @@ All values can be overridden with environment variables (see .env.example).
 Nothing here talks to the network -- it only reads configuration.
 """
 from __future__ import annotations
+import os
+TEXT_MODEL = os.getenv("TEXT_MODEL", "gemini-3.5-flash-lite")
+IMAGE_MODEL = os.getenv("IMAGE_MODEL", "gemini-3-pro-image")
+IMAGE_SIZE = os.getenv("IMAGE_SIZE", "4K")
+CAP_INR = float(os.getenv("MONTHLY_CAP_INR", "2500"))
+IN_RATE = float(os.getenv("INR_PER_M_INPUT", "10"))
+OUT_RATE = float(os.getenv("INR_PER_M_OUTPUT", "40"))
+IMG_COST = float(os.getenv("INR_PER_IMAGE_4K", "20"))
+USAGE_FILE = os.getenv("USAGE_FILE", "usage.json")
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 import os
 from dataclasses import dataclass
@@ -51,6 +61,12 @@ class Settings:
     # which is exactly what the shareable warning graphic needs.
     image_model: str = os.environ.get("IMAGE_MODEL", "gemini-3-pro-image")
 
+    # Resolution of the awareness graphic: "1K", "2K" or "4K" (the API needs
+    # the capital K). 4K is the project default but is the priciest option
+    # (~$0.24 per image vs ~$0.134 for 1K/2K) -- since a graphic is now
+    # generated for every check, "2K" stretches the monthly budget ~1.8x.
+    image_size: str = os.environ.get("IMAGE_SIZE", "4K").strip().upper()
+
     # Soft, in-app monthly spending guard (see docs/ARCHITECTURE.md for why
     # this is a *soft* guard and should be paired with a real billing alert).
     monthly_budget_inr: float = _env_float("MONTHLY_BUDGET_INR", 2500.0)
@@ -73,6 +89,8 @@ class Settings:
     data_dir: Path = DATA_DIR
 
     def __post_init__(self) -> None:
+        if self.image_size not in {"1K", "2K", "4K"}:
+            self.image_size = "4K"
         raw = os.environ.get("ALLOWED_ORIGINS", "*")
         self.allowed_origins = ["*"] if raw.strip() == "*" else [
             o.strip() for o in raw.split(",") if o.strip()

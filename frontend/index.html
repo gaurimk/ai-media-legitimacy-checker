@@ -1,80 +1,65 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AI Media Legitimacy Checker</title>
-  <link rel="stylesheet" href="styles.css" />
-</head>
-<body>
-  <main class="page">
-    <header class="header">
-      <h1>AI Media Legitimacy Checker</h1>
-      <p class="subtitle">Paste a message or link, or upload an image/video that's circulating — get a sourced AI verdict before you believe or forward it.</p>
-    </header>
-
-    <section class="card">
-      <div class="tabs" role="tablist">
-        <button class="tab active" data-tab="text" role="tab" aria-selected="true">Message / Link</button>
-        <button class="tab" data-tab="file" role="tab" aria-selected="false">Image / Video</button>
-      </div>
-
-      <form id="analyze-form">
-        <div class="tab-panel" data-panel="text">
-          <label for="text-input">Paste the message, screenshot text, or link</label>
-          <textarea id="text-input" name="text" rows="5" placeholder="e.g. 'Congratulations! You've won a lottery. Click here to claim: bit.ly/xyz'"></textarea>
-        </div>
-
-        <div class="tab-panel hidden" data-panel="file">
-          <label for="file-input">Upload an image or video</label>
-          <div id="drop-zone" class="drop-zone">
-            <input type="file" id="file-input" name="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm" />
-            <p id="drop-zone-text">Drag and drop, or click to choose a file (max 20&nbsp;MB)</p>
-          </div>
-        </div>
-
-        <label for="note-input">Anything else worth knowing? (optional)</label>
-        <input type="text" id="note-input" name="note" placeholder="e.g. 'My aunt received this on WhatsApp today'" />
-
-        <button type="submit" id="submit-btn">Check this</button>
-      </form>
-
-      <p id="form-error" class="error hidden"></p>
-    </section>
-
-    <section id="loading" class="card hidden">
-      <div class="spinner" aria-hidden="true"></div>
-      <p>Researching this against the web — this can take up to a minute…</p>
-    </section>
-
-    <section id="result" class="card hidden">
-      <div id="verdict-badge" class="badge"></div>
-      <p id="verdict-summary"></p>
-
-      <div id="red-flags-wrap" class="hidden">
-        <h3>Red flags found</h3>
-        <ul id="red-flags-list"></ul>
-      </div>
-
-      <div id="sources-wrap" class="hidden">
-        <h3>Sources used</h3>
-        <ul id="sources-list"></ul>
-      </div>
-
-      <div id="image-wrap" class="hidden">
-        <h3>Shareable warning image</h3>
-        <img id="warning-image" alt="AI-generated scam warning graphic" />
-        <a id="download-link" download="scam-warning.png">Download to forward</a>
-      </div>
-
-      <button id="reset-btn" type="button">Check something else</button>
-    </section>
-
-    <footer class="footer">
-      <p>AI verdicts can be wrong. When in doubt, verify with the official source directly before acting.</p>
-    </footer>
-  </main>
-
-  <script src="app.js"></script>
-</body>
-</html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Is this a scam?</title>
+<style>
+:root{--bg:#f7f5ef;--ink:#1d2320;--muted:#5d665f;--line:#cfd3c8;--go:#1f6b46;--warn:#b3261e;--maybe:#8a6100;--btn:#1d2320}
+@media(prefers-color-scheme:dark){:root{--bg:#161a18;--ink:#eceee8;--muted:#a3aba3;--line:#343b37;--go:#5cc08a;--warn:#ff8a80;--maybe:#e6b84f;--btn:#eceee8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 Georgia,"Times New Roman",serif}
+main{max-width:640px;margin:0 auto;padding:40px 20px 80px}
+h1{font-size:2.1rem;line-height:1.15;margin:0 0 8px}
+p.lead{color:var(--muted);margin:0 0 28px}
+textarea{width:100%;min-height:140px;padding:14px;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit;font:inherit}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:14px 0}
+input[type=file]{font:15px system-ui,sans-serif;max-width:100%}
+button{font:600 16px system-ui,sans-serif;padding:12px 22px;border:0;border-radius:6px;background:var(--btn);color:var(--bg);cursor:pointer}
+button:disabled{opacity:.5;cursor:wait}
+:focus-visible{outline:3px solid var(--maybe);outline-offset:2px}
+#out{margin-top:36px}
+.verdict{font-size:1.9rem;margin:0}
+.legitimate{color:var(--go)}.scam,.likely_fake{color:var(--warn)}.uncertain{color:var(--maybe)}
+.meta{color:var(--muted);font:14px system-ui,sans-serif}
+h2{font-size:1.1rem;margin:26px 0 6px}
+ul{padding-left:20px;margin:0}
+a{color:inherit}
+img.poster{width:100%;border:1px solid var(--line);border-radius:6px;margin-top:8px}
+.err{color:var(--warn);font:15px system-ui,sans-serif}
+.fb{margin-top:28px;font:15px system-ui,sans-serif}
+.fb button{padding:8px 14px;margin-right:8px;background:transparent;color:var(--ink);border:1px solid var(--line)}
+</style></head><body><main>
+<h1>Got a message that feels off?</h1>
+<p class="lead">Paste it or upload a screenshot. We check it against the web and tell you what to watch for.</p>
+<textarea id="text" aria-label="Message to check" placeholder="Paste the message, link or claim here"></textarea>
+<div class="row"><input id="file" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" aria-label="Screenshot or PDF">
+<button id="go">Check it</button></div>
+<div id="out" aria-live="polite"></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const NAMES={legitimate:'Looks legitimate',likely_fake:'Likely fake',scam:'Scam',uncertain:'Not sure'};
+const list=(t,a)=>a&&a.length?`<h2>${t}</h2><ul>${a.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'';
+let last=null;
+$('go').onclick=async()=>{
+  const fd=new FormData(); fd.append('text',$('text').value);
+  if($('file').files[0]) fd.append('file',$('file').files[0]);
+  $('go').disabled=true; $('go').textContent='Checking…'; $('out').innerHTML='';
+  try{
+    const r=await fetch('/api/analyze',{method:'POST',body:fd});
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail||'Something went wrong.');
+    const {verdict:v,warning_image_url:img}=await r.json(); last=v.label;
+    const src=v.sources.filter(s=>/^https?:\/\//.test(s.url)).map(s=>`<li><a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title)}</a>: ${esc(s.note)}</li>`).join('');
+    $('out').innerHTML=`<p class="verdict ${v.label}">${NAMES[v.label]}</p>
+      <p class="meta">Confidence ${Math.round(v.confidence*100)}%</p><p>${esc(v.summary)}</p>
+      ${list('Red flags',v.red_flags)}${list('What it could cost you',v.consequences)}${list('What to do',v.awareness_tips)}
+      ${src?`<h2>Sources</h2><ul>${src}</ul>`:''}
+      ${img?`<h2>Poster to share</h2><a href="${esc(img)}" download><img class="poster" src="${esc(img)}" alt="Awareness poster"></a>`:''}
+      <div class="fb">Was this clear? <button data-h="1">Yes</button><button data-h="0">No</button></div>`;
+    document.querySelectorAll('.fb button').forEach(b=>b.onclick=async()=>{
+      await fetch('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({helpful:b.dataset.h==='1',verdict_label:last})});
+      b.parentElement.textContent='Thanks for the feedback.';});
+  }catch(e){$('out').innerHTML=`<p class="err">${esc(e.message)}</p>`}
+  finally{$('go').disabled=false;$('go').textContent='Check it'}
+};
+</script></body></html>

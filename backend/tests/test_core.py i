@@ -1,0 +1,32 @@
+import pytest
+from pydantic import ValidationError
+from app import budget, config, pricing
+from app.sanitize import scrub
+from app.schemas import VerdictResult, FeedbackRequest
+
+@pytest.fixture(autouse=True)
+def tmp_usage(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "USAGE_FILE", str(tmp_path / "u.json"))
+
+def test_scrub_links_and_phones():
+    out = scrub("Click https://evil.xyz/win or call +91 98765 43210, also www.bad.in")
+    assert "evil" not in out and "98765" not in out and "bad.in" not in out
+    assert "a suspicious link" in out
+
+def test_text_cost_math(monkeypatch):
+    monkeypatch.setattr(config, "IN_RATE", 10); monkeypatch.setattr(config, "OUT_RATE", 40)
+    assert pricing.text_cost(1_000_000, 500_000) == pytest.approx(30)
+
+def test_budget_guard(monkeypatch):
+    monkeypatch.setattr(config, "CAP_INR", 100)
+    assert budget.can_spend(60); budget.record(60)
+    assert not budget.can_spend(50)
+    assert budget.status().remaining_inr == 40
+
+def test_confidence_bounds():
+    with pytest.raises(ValidationError):
+        VerdictResult(label="scam", confidence=1.5, summary="x")
+
+def test_feedback_message_cap():
+    with pytest.raises(ValidationError):
+        FeedbackRequest(helpful=True, message="x" * 1001)

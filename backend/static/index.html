@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Is this a scam?</title>
+<style>
+:root{--bg:#f7f5ef;--ink:#1d2320;--muted:#5d665f;--line:#cfd3c8;--go:#1f6b46;--warn:#b3261e;--maybe:#8a6100;--btn:#1d2320}
+@media(prefers-color-scheme:dark){:root{--bg:#161a18;--ink:#eceee8;--muted:#a3aba3;--line:#343b37;--go:#5cc08a;--warn:#ff8a80;--maybe:#e6b84f;--btn:#eceee8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 Georgia,"Times New Roman",serif}
+main{max-width:640px;margin:0 auto;padding:40px 20px 80px}
+h1{font-size:2.1rem;line-height:1.15;margin:0 0 8px}
+p.lead{color:var(--muted);margin:0 0 28px}
+textarea{width:100%;min-height:140px;padding:14px;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit;font:inherit}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:14px 0}
+input[type=file]{font:15px system-ui,sans-serif;max-width:100%}
+button{font:600 16px system-ui,sans-serif;padding:12px 22px;border:0;border-radius:6px;background:var(--btn);color:var(--bg);cursor:pointer}
+button:disabled{opacity:.5;cursor:wait}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);padding:8px 14px;font-size:14px}
+[hidden]{display:none!important}
+:focus-visible{outline:3px solid var(--maybe);outline-offset:2px}
+#out{margin-top:36px}
+.verdict{font-size:1.9rem;margin:0}
+.legitimate{color:var(--go)}.scam,.likely_fake{color:var(--warn)}.uncertain{color:var(--maybe)}
+.meta{color:var(--muted);font:14px system-ui,sans-serif}
+h2{font-size:1.1rem;margin:26px 0 6px}
+ul{padding-left:20px;margin:0}
+a{color:inherit}
+img.poster{width:100%;border:1px solid var(--line);border-radius:6px;margin-top:8px}
+.err{color:var(--warn);font:15px system-ui,sans-serif}
+.note{color:var(--muted);font:14px system-ui,sans-serif;margin:0}
+.ask{border-left:3px solid var(--maybe);padding-left:14px;margin-top:22px}
+.ask h2{margin-top:0}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.fb{margin-top:28px;font:15px system-ui,sans-serif}
+.fb button{padding:8px 14px;margin-right:8px;background:transparent;color:var(--ink);border:1px solid var(--line)}
+</style></head><body><main>
+<h1>Got a message that feels off?</h1>
+<p class="lead">Paste a message or link, or upload a screenshot or short video. We check it against the web and tell you what to watch for.</p>
+<textarea id="text" aria-label="Message or link to check" placeholder="Paste the message or link here"></textarea>
+<div class="row">
+  <input id="file" type="file" accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm,video/3gpp" aria-label="Screenshot or video">
+  <button id="clearFile" class="ghost" type="button" hidden>Remove file</button>
+  <button id="go">Check it</button>
+</div>
+<p class="note">Check one thing at a time: text or link, or an image or video. Files up to 50 MB. Videos can take up to a minute.</p>
+<div id="out" aria-live="polite"></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const MAX=50*1024*1024;
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const NAMES={legitimate:'Looks legitimate',likely_fake:'Likely fake',scam:'Scam',uncertain:'Not sure'};
+const list=(t,a)=>a&&a.length?`<h2>${t}</h2><ul>${a.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'';
+
+function syncFileUI(){ $('clearFile').hidden=!$('file').files.length; }
+function clearFile(){ $('file').value=''; syncFileUI(); }
+// One input at a time: picking a file empties the text box, typing removes the file.
+$('file').addEventListener('change',()=>{ if($('file').files.length) $('text').value=''; syncFileUI(); });
+$('text').addEventListener('input',()=>{ if($('file').files.length) clearFile(); });
+$('clearFile').onclick=clearFile;
+
+async function makePoster(v){
+  const box=$('poster');
+  try{
+    const r=await fetch('/api/poster',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(v)});
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail||'Poster failed.');
+    const {warning_image_url:img}=await r.json();
+    box.innerHTML=`<h2>Warning poster: save and share</h2><a href="${esc(img)}" download><img class="poster" src="${esc(img)}" alt="Warning poster: this content is not genuine"></a>`;
+  }catch(e){box.innerHTML=`<p class="note">${esc(e.message)}</p>`}
+}
+
+let last=null, saved=null;
+
+function show(v){
+  last=v.label;
+  const src=v.sources.filter(s=>/^https?:\/\//.test(s.url)).map(s=>`<li><a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title)}</a>: ${esc(s.note)}</li>`).join('');
+  const fake=v.label==='scam'||v.label==='likely_fake';
+  const q=v.follow_up_question, opts=v.follow_up_options||[];
+  const ask=(q&&opts.length)?`<div class="ask"><h2>One quick question</h2><p>${esc(q)}</p><div class="chips">${opts.map(o=>`<button class="ghost" data-a="${esc(o)}">${esc(o)}</button>`).join('')}<button class="ghost" data-a="">Skip</button></div></div>`:'';
+  $('out').innerHTML=`<p class="verdict ${v.label}">${NAMES[v.label]}</p>
+    <p class="meta">Confidence ${Math.round(v.confidence*100)}%</p><p>${esc(v.summary)}</p>
+    ${ask}
+    ${fake?'<div id="poster"><p class="note">Making your warning poster. This can take up to a minute.</p></div>':''}
+    ${list('Red flags',v.red_flags)}${list('What it could cost you',v.consequences)}${list('What to do',v.awareness_tips)}
+    ${src?`<h2>Sources</h2><ul>${src}</ul>`:''}
+    <div class="fb">Was this clear? <button data-h="1">Yes</button><button data-h="0">No</button></div>`;
+  document.querySelectorAll('.chips button').forEach(b=>b.onclick=()=>{
+    if(!b.dataset.a){ const a=document.querySelector('.ask'); if(a) a.remove(); return; }
+    run(`${q} Answer: ${b.dataset.a}`);
+  });
+  document.querySelectorAll('.fb button').forEach(b=>b.onclick=async()=>{
+    await fetch('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({helpful:b.dataset.h==='1',verdict_label:last})});
+    b.parentElement.textContent='Thanks for the feedback.';});
+  if(fake) makePoster(v);
+}
+
+async function run(context){
+  const {text,file}=saved;
+  const video=file&&file.type.startsWith('video/');
+  const fd=new FormData(); fd.append('text',text);
+  if(file) fd.append('file',file);
+  if(context) fd.append('context',context);
+  $('go').disabled=true; $('go').textContent=video?'Checking video…':'Checking…';
+  $('out').innerHTML=`<p class="note">${context?'Thanks. Checking again with that detail…':video?'Got it. Watching your video now. This can take up to a minute.':file?'Got it. Reading your screenshot…':'Got it. Checking your message against the web…'}</p>`;
+  try{
+    const r=await fetch('/api/analyze',{method:'POST',body:fd});
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail||'Something went wrong.');
+    const {verdict:v}=await r.json();
+    clearFile(); $('text').value=''; // ready for the next check
+    show(v);
+  }catch(e){$('out').innerHTML=`<p class="err">${esc(e.message)}</p>`}
+  finally{$('go').disabled=false;$('go').textContent='Check it'}
+}
+
+$('go').onclick=()=>{
+  const f=$('file').files[0];
+  if(f&&f.size>MAX){$('out').innerHTML='<p class="err">That file is over 50 MB. Choose a smaller one.</p>';return}
+  saved={text:$('text').value,file:f||null};
+  run('');
+};
+</script></body></html>

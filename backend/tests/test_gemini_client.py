@@ -127,3 +127,94 @@ def test_generate_verdict_image_raises_when_no_image_returned(monkeypatch):
     verdict = VerdictResult(label=VerdictLabel.SCAM, confidence=0.9, summary="Fake lottery scam.")
     with pytest.raises(gemini_client.GeminiClientError):
         gemini_client.generate_verdict_image(verdict)
+
+
+# --- JSON repair + two-step fallback ---------------------------------------
+
+
+class _SequencedInteractions:
+    """Returns a different canned response for each successive create() call."""
+
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.calls = []
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        return self._responses[len(self.calls) - 1]
+
+
+class _SequencedClient:
+    def __init__(self, responses):
+        self.interactions = _SequencedInteractions(responses)
+
+
+def test_parse_repairs_trailing_comma(monkeypatch):
+    broken = VALID_VERDICT_JSON.replace('"Requests an upfront payment"]', '"Requests an upfront payment",]')
+    fake_client = _FakeClient(_fake_text_response(broken))
+    monkeypatch.setattr(gemini_client, "get_client", lambda: fake_client)
+
+    outcome = gemini_client.analyze_content(text="hi", media_bytes=None, media_mime_type=None, note=None)
+    assert outcome.verdict.label is VerdictLabel.SCAM
+
+
+def test_parse_recovers_from_trailing_content_after_object(monkeypatch):
+    fake_client = _FakeClient(_fake_text_response(VALID_VERDICT_JSON + "\n]\n}"))
+    monkeypatch.setattr(gemini_client, "get_client", lambda: fake_client)
+
+    outcome = gemini_client.analyze_content(text="hi", media_bytes=None, media_mime_type=None, note=None)
+    assert outcome.verdict.label is VerdictLabel.SCAM
+
+
+def test_falls_back_to_two_step_when_single_pass_is_unparseable(monkeypatch):
+    citation = SimpleNamespace(url="https://example.gov/advisory", title="Consumer advisory")
+    research = SimpleNamespace(
+        output_text="Verdict: scam. Asks for an upfront fee.",
+        usage=SimpleNamespace(input_tokens=1000, output_tokens=300),
+        steps=[SimpleNamespace(content=[SimpleNamespace(annotations=[citation])])],
+    )
+    client = _SequencedClient(
+        [
+            _fake_text_response("{ this is not json at all"),  # 1: single pass, unusable
+            research,  # 2: research with tools
+            _fake_text_response(VALID_VERDICT_JSON),  # 3: format without tools
+        ]
+    )
+    monkeypatch.setattr(gemini_client, "get_client", lambda: client)
+
+    outcome = gemini_client.analyze_content(text="hi", media_bytes=None, media_mime_type=None, note=None)
+
+    assert outcome.verdict.label is VerdictLabel.SCAM
+    assert outcome.estimated_cost_inr > 0
+
+    calls = client.interactions.calls
+    assert len(calls) == 3
+    assert "tools" in calls[1] and "response_format" not in calls[1]  # research: tools, no schema
+    assert "tools" not in calls[2] and "response_format" in calls[2]  # format: schema, no tools
+    assert "https://example.gov/advisory" in calls[2]["input"]  # real citation was passed along
+
+
+def test_raises_when_fallback_also_fails(monkeypatch):
+    client = _SequencedClient(
+        [
+            _fake_text_response("nope"),
+            SimpleNamespace(output_text="findings", usage=None, steps=[]),
+            _fake_text_response("still not json"),
+        ]
+    )
+    monkeypatch.setattr(gemini_client, "get_client", lambda: client)
+
+    with pytest.raises(gemini_client.GeminiClientError):
+        gemini_client.analyze_content(text="hi", media_bytes=None, media_mime_type=None, note=None)
+
+
+@pytest.mark.parametrize(
+    "usage",
+    [
+        SimpleNamespace(input_tokens=100, output_tokens=50),
+        SimpleNamespace(total_input_tokens=100, total_output_tokens=50),
+        SimpleNamespace(prompt_tokens=100, completion_tokens=50),
+    ],
+)
+def test_usage_tokens_read_from_any_known_field_name(usage):
+    assert gemini_client._read_usage_tokens(usage) == (100, 50)

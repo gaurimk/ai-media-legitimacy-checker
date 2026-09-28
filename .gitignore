@@ -19,3 +19,12 @@ backend/app/static/verdicts/*
 .vscode/
 .idea/
 backend/.env
+
+.env
+.venv/
+__pycache__/
+*.pyc
+backend/usage.json
+backend/usage.json.tmp
+backend/generated/
+.DS_Store

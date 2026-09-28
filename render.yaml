@@ -1,23 +1,22 @@
 services:
   - type: web
-    name: ai-media-legitimacy-checker
+    name: scam-checker
     runtime: python
     rootDir: backend
-    plan: free  # no persistent disk on this tier -- see note below
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/usage
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.18
       - key: GEMINI_API_KEY
-        sync: false  # set manually in the Render dashboard, never committed
-      - key: ANALYSIS_MODEL
+        sync: false
+      - key: TEXT_MODEL
         value: gemini-3.5-flash-lite
       - key: IMAGE_MODEL
         value: gemini-3-pro-image
-      - key: MONTHLY_BUDGET_INR
+      - key: IMAGE_SIZE
+        value: 2K
+      - key: MONTHLY_CAP_INR
         value: "2500"
-      - key: USD_TO_INR_RATE
-        value: "90"
-      - key: MAX_UPLOAD_MB
-        value: "20"
-      - key: ALLOWED_ORIGINS
-        value: "*"  # tighten to your real frontend origin(s) once you have one
