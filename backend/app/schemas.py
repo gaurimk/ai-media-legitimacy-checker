@@ -78,28 +78,17 @@ class VerdictResult(BaseModel):
             "must be under 12 words."
         ),
     )
-    follow_up_question: str = Field(
-        default="",
-        description=(
-            "ONLY when the label is 'uncertain' AND one missing fact about who sent the content, "
-            "how it arrived, or where it was found would change the verdict: ONE short question "
-            "(under 15 words). Otherwise an empty string. Never ask for OTPs, passwords, PINs, "
-            "account numbers or other personal data."
-        ),
-    )
-    follow_up_options: List[str] = Field(
-        default_factory=list,
-        description=(
-            "2-4 short answers (under 4 words each) the person can tap in reply to the follow-up "
-            "question, e.g. 'Unknown number'. Empty when follow_up_question is empty."
-        ),
-    )
+
 
 class AnalyzeResponse(BaseModel):
     verdict: VerdictResult
+    session_id: Optional[str] = Field(
+        default=None,
+        description="Chat session id for follow-up questions about this result.",
+    )
     warning_image_url: Optional[str] = Field(
         default=None,
-        description="Relative URL to a downloadable AI-generated warning poster. Only set for 'scam' and 'likely_fake' verdicts, and only if the budget allows.",
+        description="Unused; posters are fetched separately via /api/poster.",
     )
 
 
@@ -124,3 +113,25 @@ class FeedbackRequest(BaseModel):
 
 class FeedbackResponse(BaseModel):
     status: str = "recorded"
+
+
+class ChatRequest(BaseModel):
+    session_id: str
+    message: str = Field(min_length=1, max_length=1000)
+
+
+class ChatModelOutput(BaseModel):
+    reply: str = Field(description="Short plain-language reply, 1-4 sentences.")
+    recheck: bool = Field(
+        default=False,
+        description=(
+            "True only if the person gave NEW information about who sent the content, how it "
+            "arrived, or where it was found that could change the verdict."
+        ),
+    )
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    verdict: Optional[VerdictResult] = None
+    turns_left: int

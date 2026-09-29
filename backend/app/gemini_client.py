@@ -9,9 +9,11 @@ import httpx
 from google import genai
 from google.genai import types
 
-from . import config as c, pricing
+from . import pricing
+from .chat_prompts import chat_system
+from .config import settings
 from .scam_prompts import ANALYZE_SYSTEM, image_prompt
-from .schemas import Source, VerdictResult
+from .schemas import ChatModelOutput, Source, VerdictResult
 
 OUT = pathlib.Path("generated"); OUT.mkdir(exist_ok=True)
 _client = None
@@ -22,8 +24,14 @@ MAX_SOURCES = 4
 def client():
     global _client
     if _client is None:
-        _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        _client = genai.Client(api_key=settings.gemini_api_key or os.environ["GEMINI_API_KEY"])
     return _client
+
+
+def _cost_inr(resp, model: str, searched: bool) -> float:
+    u = resp.usage_metadata
+    out = (u.candidates_token_count or 0) + (getattr(u, "thoughts_token_count", 0) or 0)
+    return pricing.estimate_text_cost_inr(model, u.prompt_token_count or 0, out, searched=searched)
 
 
 # ---------- source verification ----------
@@ -76,11 +84,9 @@ async def _verified_sources(v: VerdictResult, grounded: list[tuple[str, str]]) -
             seen.add(d)
             result.append(Source(title=title or d, url=url, note=note))
 
-    # 1. model-written sources, only if the page really exists
     for s, final in zip(v.sources, model_final):
         if final:
             add(s.title, final, s.note)
-    # 2. pages the search actually retrieved
     for (_, title), final in zip(grounded[:8], grounded_final):
         if final:
             add(title, final, "Found while checking this content.")
@@ -96,7 +102,7 @@ async def analyze(text: str, file: tuple[bytes, str] | None) -> tuple[VerdictRes
         if mime.startswith("video/"):
             uploaded = await client().aio.files.upload(
                 file=io.BytesIO(data), config=types.UploadFileConfig(mime_type=mime))
-            for _ in range(60):  # wait up to ~2 min for processing
+            for _ in range(60):
                 uploaded = await client().aio.files.get(name=uploaded.name)
                 state = getattr(uploaded.state, "name", str(uploaded.state))
                 if state == "ACTIVE":
@@ -112,7 +118,7 @@ async def analyze(text: str, file: tuple[bytes, str] | None) -> tuple[VerdictRes
     parts.append(types.Part.from_text(text=text or "Check the attached content."))
     try:
         resp = await client().aio.models.generate_content(
-            model=c.TEXT_MODEL,
+            model=settings.analysis_model,
             contents=parts,
             config=types.GenerateContentConfig(
                 system_instruction=ANALYZE_SYSTEM,
@@ -129,20 +135,35 @@ async def analyze(text: str, file: tuple[bytes, str] | None) -> tuple[VerdictRes
                 pass
     verdict = VerdictResult.model_validate_json(resp.text)
     verdict.sources = await _verified_sources(verdict, _grounded(resp))
-    u = resp.usage_metadata
-    cost = pricing.text_cost(u.prompt_token_count or 0, u.candidates_token_count or 0)
-    return verdict, cost
+    return verdict, _cost_inr(resp, settings.analysis_model, searched=True)
+
+
+# ---------- chat ----------
+
+async def chat(verdict: VerdictResult, history: list[tuple[str, str]], message: str):
+    convo = [types.Content(role=r, parts=[types.Part.from_text(text=t)]) for r, t in history]
+    convo.append(types.Content(role="user", parts=[types.Part.from_text(text=message)]))
+    resp = await client().aio.models.generate_content(
+        model=settings.analysis_model,
+        contents=convo,
+        config=types.GenerateContentConfig(
+            system_instruction=chat_system(verdict),
+            response_mime_type="application/json",
+            response_schema=ChatModelOutput,
+        ),
+    )
+    return ChatModelOutput.model_validate_json(resp.text), _cost_inr(resp, settings.analysis_model, searched=False)
 
 
 # ---------- poster ----------
 
 async def make_poster(v: VerdictResult) -> str | None:
     resp = await client().aio.models.generate_content(
-        model=c.IMAGE_MODEL,
+        model=settings.image_model,
         contents=image_prompt(v),
         config=types.GenerateContentConfig(
             response_modalities=["IMAGE"],
-            image_config=types.ImageConfig(aspect_ratio="3:4", image_size=c.IMAGE_SIZE),
+            image_config=types.ImageConfig(aspect_ratio="3:4", image_size=settings.image_size),
         ),
     )
     for part in resp.candidates[0].content.parts:

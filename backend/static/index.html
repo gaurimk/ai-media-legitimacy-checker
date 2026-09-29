@@ -28,11 +28,18 @@ a{color:inherit}
 img.poster{width:100%;border:1px solid var(--line);border-radius:6px;margin-top:8px}
 .err{color:var(--warn);font:15px system-ui,sans-serif}
 .note{color:var(--muted);font:14px system-ui,sans-serif;margin:0}
-.ask{border-left:3px solid var(--maybe);padding-left:14px;margin-top:22px}
-.ask h2{margin-top:0}
-.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
 .fb{margin-top:28px;font:15px system-ui,sans-serif}
 .fb button{padding:8px 14px;margin-right:8px;background:transparent;color:var(--ink);border:1px solid var(--line)}
+#chat{margin-top:40px;border-top:1px solid var(--line);padding-top:8px}
+.msgs{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.m{padding:10px 14px;border-radius:10px;max-width:92%;font:15px/1.45 system-ui,sans-serif;white-space:pre-wrap}
+.m.user{align-self:flex-end;background:var(--btn);color:var(--bg)}
+.m.bot{align-self:flex-start;border:1px solid var(--line)}
+.m.sys{align-self:center;color:var(--muted);font-size:13px;padding:2px}
+.m.err{color:var(--warn)}
+.chatrow{display:flex;gap:8px}
+.chatrow input{flex:1;padding:12px;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit;font:16px system-ui,sans-serif}
 </style></head><body><main>
 <h1>Got a message that feels off?</h1>
 <p class="lead">Paste a message or link, or upload a screenshot or short video. We check it against the web and tell you what to watch for.</p>
@@ -44,12 +51,22 @@ img.poster{width:100%;border:1px solid var(--line);border-radius:6px;margin-top:
 </div>
 <p class="note">Check one thing at a time: text or link, or an image or video. Files up to 50 MB. Videos can take up to a minute.</p>
 <div id="out" aria-live="polite"></div>
+<section id="chat" hidden>
+  <h2>Ask about this result</h2>
+  <div id="msgs" class="msgs" aria-live="polite"></div>
+  <div id="srcChips" class="chips"></div>
+  <div class="chatrow">
+    <input id="chatIn" maxlength="1000" placeholder="Type your question" aria-label="Your question">
+    <button id="send">Send</button>
+  </div>
+</section>
 </main>
 <script>
 const $=id=>document.getElementById(id);
 const MAX=50*1024*1024;
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const NAMES={legitimate:'Looks legitimate',likely_fake:'Likely fake',scam:'Scam',uncertain:'Not sure'};
+const SOURCES=['Unknown number','Official group','Email','WhatsApp','SMS','Social media','Not sure'];
 const list=(t,a)=>a&&a.length?`<h2>${t}</h2><ul>${a.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'';
 
 function syncFileUI(){ $('clearFile').hidden=!$('file').files.length; }
@@ -59,63 +76,96 @@ $('file').addEventListener('change',()=>{ if($('file').files.length) $('text').v
 $('text').addEventListener('input',()=>{ if($('file').files.length) clearFile(); });
 $('clearFile').onclick=clearFile;
 
+let sid=null, busy=false, checkId=0, posterHtml='', posterLabel=null, posterPending=null;
+
 async function makePoster(v){
-  const box=$('poster');
+  const my=checkId; posterPending=v.label;
+  let html;
   try{
     const r=await fetch('/api/poster',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(v)});
     if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail||'Poster failed.');
     const {warning_image_url:img}=await r.json();
-    box.innerHTML=`<h2>Warning poster: save and share</h2><a href="${esc(img)}" download><img class="poster" src="${esc(img)}" alt="Warning poster: this content is not genuine"></a>`;
-  }catch(e){box.innerHTML=`<p class="note">${esc(e.message)}</p>`}
+    html=`<h2>Warning poster: save and share</h2><a href="${esc(img)}" download><img class="poster" src="${esc(img)}" alt="Warning poster: this content is not genuine"></a>`;
+  }catch(e){ html=`<p class="note">${esc(e.message)}</p>`; }
+  if(my!==checkId) return; // a newer check has started
+  posterHtml=html; posterLabel=v.label; posterPending=null;
+  if($('poster')) $('poster').innerHTML=html;
 }
 
-let last=null, saved=null;
-
 function show(v){
-  last=v.label;
   const src=v.sources.filter(s=>/^https?:\/\//.test(s.url)).map(s=>`<li><a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title)}</a>: ${esc(s.note)}</li>`).join('');
   const fake=v.label==='scam'||v.label==='likely_fake';
-  const q=v.follow_up_question, opts=v.follow_up_options||[];
-  const ask=(q&&opts.length)?`<div class="ask"><h2>One quick question</h2><p>${esc(q)}</p><div class="chips">${opts.map(o=>`<button class="ghost" data-a="${esc(o)}">${esc(o)}</button>`).join('')}<button class="ghost" data-a="">Skip</button></div></div>`:'';
+  let poster='', start=false;
+  if(fake){
+    if(posterLabel===v.label) poster=`<div id="poster">${posterHtml}</div>`;
+    else { poster='<div id="poster"><p class="note">Making your warning poster. This can take up to a minute.</p></div>'; start=posterPending!==v.label; }
+  }
   $('out').innerHTML=`<p class="verdict ${v.label}">${NAMES[v.label]}</p>
     <p class="meta">Confidence ${Math.round(v.confidence*100)}%</p><p>${esc(v.summary)}</p>
-    ${ask}
-    ${fake?'<div id="poster"><p class="note">Making your warning poster. This can take up to a minute.</p></div>':''}
+    ${sid?'<p class="meta"><a href="#chat">Ask a question about this result ↓</a></p>':''}
+    ${poster}
     ${list('Red flags',v.red_flags)}${list('What it could cost you',v.consequences)}${list('What to do',v.awareness_tips)}
     ${src?`<h2>Sources</h2><ul>${src}</ul>`:''}
     <div class="fb">Was this clear? <button data-h="1">Yes</button><button data-h="0">No</button></div>`;
-  document.querySelectorAll('.chips button').forEach(b=>b.onclick=()=>{
-    if(!b.dataset.a){ const a=document.querySelector('.ask'); if(a) a.remove(); return; }
-    run(`${q} Answer: ${b.dataset.a}`);
-  });
   document.querySelectorAll('.fb button').forEach(b=>b.onclick=async()=>{
-    await fetch('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({helpful:b.dataset.h==='1',verdict_label:last})});
+    await fetch('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({helpful:b.dataset.h==='1',verdict_label:v.label})});
     b.parentElement.textContent='Thanks for the feedback.';});
-  if(fake) makePoster(v);
+  if(start) makePoster(v);
 }
 
-async function run(context){
-  const {text,file}=saved;
-  const video=file&&file.type.startsWith('video/');
-  const fd=new FormData(); fd.append('text',text);
-  if(file) fd.append('file',file);
-  if(context) fd.append('context',context);
+function addMsg(cls,text){
+  const d=document.createElement('div'); d.className='m '+cls; d.textContent=text;
+  $('msgs').appendChild(d); d.scrollIntoView({block:'nearest'}); return d;
+}
+
+function startChat(){
+  $('chat').hidden=false; $('msgs').innerHTML='';
+  $('chatIn').disabled=false; $('send').disabled=false;
+  addMsg('bot','Ask me anything about this result. First, where did you get it?');
+  $('srcChips').hidden=false;
+  $('srcChips').innerHTML=SOURCES.map(o=>`<button class="ghost" data-s="${esc(o)}">${esc(o)}</button>`).join('');
+  $('srcChips').querySelectorAll('button').forEach(b=>b.onclick=()=>send(`I got this from: ${b.dataset.s}`));
+}
+
+async function send(msg){
+  msg=(msg||'').trim();
+  if(!msg||busy||!sid) return;
+  busy=true; $('srcChips').hidden=true; $('chatIn').value=''; $('send').disabled=true;
+  addMsg('user',msg); const wait=addMsg('bot','…');
+  try{
+    const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sid,message:msg})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ if(r.status===410) sid=null; throw new Error(d.detail||'Chat failed.'); }
+    wait.textContent=d.reply;
+    if(d.verdict){ show(d.verdict); addMsg('sys',`Result updated: ${NAMES[d.verdict.label]}, ${Math.round(d.verdict.confidence*100)}% confidence`); }
+    if(d.turns_left<=0){ $('chatIn').disabled=true; addMsg('sys','Chat limit reached for this check. Start a new check to continue.'); }
+  }catch(e){
+    wait.textContent=e.message; wait.classList.add('err');
+    if(!sid) $('chatIn').disabled=true;
+  }finally{
+    busy=false; if(!$('chatIn').disabled) $('send').disabled=false;
+  }
+}
+$('send').onclick=()=>send($('chatIn').value);
+$('chatIn').addEventListener('keydown',e=>{ if(e.key==='Enter') send($('chatIn').value); });
+
+$('go').onclick=async()=>{
+  const f=$('file').files[0];
+  if(f&&f.size>MAX){$('out').innerHTML='<p class="err">That file is over 50 MB. Choose a smaller one.</p>';return}
+  const video=f&&f.type.startsWith('video/');
+  const fd=new FormData(); fd.append('text',$('text').value);
+  if(f) fd.append('file',f);
+  checkId++; sid=null; posterHtml=''; posterLabel=null; posterPending=null; $('chat').hidden=true;
   $('go').disabled=true; $('go').textContent=video?'Checking video…':'Checking…';
-  $('out').innerHTML=`<p class="note">${context?'Thanks. Checking again with that detail…':video?'Got it. Watching your video now. This can take up to a minute.':file?'Got it. Reading your screenshot…':'Got it. Checking your message against the web…'}</p>`;
+  $('out').innerHTML=`<p class="note">${video?'Got it. Watching your video now. This can take up to a minute.':f?'Got it. Reading your screenshot…':'Got it. Checking your message against the web…'}</p>`;
   try{
     const r=await fetch('/api/analyze',{method:'POST',body:fd});
     if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail||'Something went wrong.');
-    const {verdict:v}=await r.json();
+    const d=await r.json(); sid=d.session_id||null;
     clearFile(); $('text').value=''; // ready for the next check
-    show(v);
+    show(d.verdict);
+    if(sid) startChat();
   }catch(e){$('out').innerHTML=`<p class="err">${esc(e.message)}</p>`}
   finally{$('go').disabled=false;$('go').textContent='Check it'}
-}
-
-$('go').onclick=()=>{
-  const f=$('file').files[0];
-  if(f&&f.size>MAX){$('out').innerHTML='<p class="err">That file is over 50 MB. Choose a smaller one.</p>';return}
-  saved={text:$('text').value,file:f||null};
-  run('');
 };
 </script></body></html>

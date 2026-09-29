@@ -27,6 +27,11 @@ IMAGE_PRICE_USD = {
     "gemini-3.1-flash-image": {"0.5K": 0.045, "1K": 0.067, "2K": 0.101, "4K": 0.151},
 }
 
+# Google bills Grounding with Google Search per request once the shared
+# monthly free quota is used up. This is only a rough per-query figure used
+# to pad the text-analysis estimate -- see settings.search_queries_per_check.
+SEARCH_PRICE_USD_PER_QUERY = 0.014
+
 
 def estimate_text_cost_usd(model: str, input_tokens: int, output_tokens: int) -> float:
     prices = TEXT_MODEL_PRICING_USD_PER_1M_TOKENS.get(model)
@@ -42,10 +47,14 @@ def estimate_image_cost_usd(model: str, image_size: str) -> float:
 def usd_to_inr(amount_usd: float) -> float:
     return amount_usd * settings.usd_to_inr_rate
 
-from . import config as c
 
-def text_cost(in_tokens: int, out_tokens: int) -> float:
-    return in_tokens / 1e6 * c.IN_RATE + out_tokens / 1e6 * c.OUT_RATE
+def estimate_text_cost_inr(model: str, input_tokens: int, output_tokens: int, *, searched: bool = False) -> float:
+    """Text-model cost in INR, optionally padded for Search grounding queries."""
+    usd = estimate_text_cost_usd(model, input_tokens, output_tokens)
+    if searched:
+        usd += SEARCH_PRICE_USD_PER_QUERY * settings.search_queries_per_check
+    return usd_to_inr(usd)
 
-def image_cost() -> float:
-    return c.IMG_COST
+
+def estimate_image_cost_inr(model: str, image_size: str) -> float:
+    return usd_to_inr(estimate_image_cost_usd(model, image_size))

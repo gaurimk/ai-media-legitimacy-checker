@@ -5,19 +5,9 @@ All values can be overridden with environment variables (see .env.example).
 Nothing here talks to the network -- it only reads configuration.
 """
 from __future__ import annotations
-import os
-TEXT_MODEL = os.getenv("TEXT_MODEL", "gemini-3.5-flash-lite")
-IMAGE_MODEL = os.getenv("IMAGE_MODEL", "gemini-3-pro-image")
-IMAGE_SIZE = os.getenv("IMAGE_SIZE", "4K")
-CAP_INR = float(os.getenv("MONTHLY_CAP_INR", "2500"))
-IN_RATE = float(os.getenv("INR_PER_M_INPUT", "10"))
-OUT_RATE = float(os.getenv("INR_PER_M_OUTPUT", "40"))
-IMG_COST = float(os.getenv("INR_PER_IMAGE_4K", "20"))
-USAGE_FILE = os.getenv("USAGE_FILE", "usage.json")
-MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -38,6 +28,16 @@ def _env_float(name: str, default: float) -> float:
         return default
     try:
         return float(raw)
+    except ValueError:
+        return default
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
     except ValueError:
         return default
 
@@ -64,7 +64,7 @@ class Settings:
     # Resolution of the awareness graphic: "1K", "2K" or "4K" (the API needs
     # the capital K). 4K is the project default but is the priciest option
     # (~$0.24 per image vs ~$0.134 for 1K/2K) -- since a graphic is now
-    # generated for every check, "2K" stretches the monthly budget ~1.8x.
+    # generated for every scam/fake check, "2K" stretches the monthly budget.
     image_size: str = os.environ.get("IMAGE_SIZE", "4K").strip().upper()
 
     # Soft, in-app monthly spending guard (see docs/ARCHITECTURE.md for why
@@ -76,15 +76,24 @@ class Settings:
     # to the live rate for an accurate estimate.
     usd_to_inr_rate: float = _env_float("USD_TO_INR_RATE", 90.0)
 
+    # Rough number of Search queries a single grounded analysis call tends to
+    # issue, used only to pad the local cost estimate -- see pricing.py.
+    search_queries_per_check: int = _env_int("SEARCH_QUERIES_PER_CHECK", 2)
+
     # Upload size ceiling, mainly to keep video-analysis cost and latency
     # predictable on a small monthly budget.
-    max_upload_mb: float = _env_float("MAX_UPLOAD_MB", 20.0)
+    max_upload_mb: float = _env_float("MAX_UPLOAD_MB", 50.0)
+
+    # Chat follow-up feature: how many turns a single check's chat allows,
+    # and how long an idle session is kept in memory before it expires.
+    chat_max_turns: int = _env_int("CHAT_MAX_TURNS", 10)
+    session_ttl_sec: int = _env_int("SESSION_TTL_SEC", 1800)
 
     # Comma-separated list of allowed origins for CORS, e.g.
     # "https://your-app.onrender.com,https://yourdomain.com".
     # Defaults to "*" (open) for local development -- set this explicitly
     # once deployed publicly.
-    allowed_origins: list[str] = None  # set below, dataclass can't do this inline
+    allowed_origins: list[str] = field(default_factory=lambda: ["*"])
 
     data_dir: Path = DATA_DIR
 
@@ -95,6 +104,10 @@ class Settings:
         self.allowed_origins = ["*"] if raw.strip() == "*" else [
             o.strip() for o in raw.split(",") if o.strip()
         ]
+
+    @property
+    def max_upload_bytes(self) -> int:
+        return int(self.max_upload_mb * 1024 * 1024)
 
 
 settings = Settings()
